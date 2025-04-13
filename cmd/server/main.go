@@ -10,6 +10,7 @@ import (
 	"github.com/Dias221467/Achievemenet_Manager/internal/handlers"
 	"github.com/Dias221467/Achievemenet_Manager/internal/repository"
 	"github.com/Dias221467/Achievemenet_Manager/internal/services"
+	"github.com/Dias221467/Achievemenet_Manager/pkg/logger"
 	"github.com/Dias221467/Achievemenet_Manager/pkg/middleware"
 	"github.com/gorilla/mux"
 )
@@ -17,6 +18,9 @@ import (
 func main() {
 	// Load configuration from .env file
 	cfg := config.LoadConfig()
+
+	logger.InitLogger()
+	logger.Log.Info("Logger initialized")
 
 	// Connect to MongoDB Atlas
 	db, err := database.ConnectDB(cfg)
