@@ -2,10 +2,10 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/Dias221467/Achievemenet_Manager/internal/models"
+	"github.com/Dias221467/Achievemenet_Manager/pkg/logger"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -31,16 +31,19 @@ func (r *GoalRepository) CreateGoal(ctx context.Context, goal *models.Goal) (*mo
 
 	result, err := r.collection.InsertOne(ctx, goal)
 	if err != nil {
-		return nil, fmt.Errorf("failed to insert goal: %v", err)
+		logger.Log.WithError(err).Error("Failed to insert goal")
+		return nil, err
 	}
 
 	// Cast the inserted ID and assign it to the goal object
 	insertedID, ok := result.InsertedID.(primitive.ObjectID)
 	if !ok {
-		return nil, fmt.Errorf("failed to cast inserted ID")
+		logger.Log.Error("Failed to cast inserted ID")
+		return nil, err
 	}
 	goal.ID = insertedID
 
+	logger.Log.WithField("goal_id", goal.ID.Hex()).Info("Goal created successfully")
 	return goal, nil
 }
 
@@ -51,9 +54,11 @@ func (r *GoalRepository) GetGoalByID(ctx context.Context, id primitive.ObjectID)
 	// Find the goal by its ID
 	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&goal)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find goal by id: %v", err)
+		logger.Log.WithError(err).WithField("goal_id", id.Hex()).Error("Failed to find goal by ID")
+		return nil, err
 	}
 
+	logger.Log.WithField("goal_id", id.Hex()).Info("Goal fetched successfully")
 	return &goal, nil
 }
 
@@ -68,9 +73,11 @@ func (r *GoalRepository) UpdateGoal(ctx context.Context, id primitive.ObjectID, 
 		bson.M{"$set": goal},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update goal: %v", err)
+		logger.Log.WithError(err).WithField("goal_id", id.Hex()).Error("Failed to update goal")
+		return nil, err
 	}
 
+	logger.Log.WithField("goal_id", id.Hex()).Info("Goal updated successfully")
 	return goal, nil
 }
 
@@ -78,9 +85,11 @@ func (r *GoalRepository) UpdateGoal(ctx context.Context, id primitive.ObjectID, 
 func (r *GoalRepository) DeleteGoal(ctx context.Context, id primitive.ObjectID) error {
 	_, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
 	if err != nil {
-		return fmt.Errorf("failed to delete goal: %v", err)
+		logger.Log.WithError(err).WithField("goal_id", id.Hex()).Error("Failed to delete goal")
+		return err
 	}
 
+	logger.Log.WithField("goal_id", id.Hex()).Info("Goal deleted successfully")
 	return nil
 }
 
@@ -91,18 +100,21 @@ func (r *GoalRepository) GetAllGoals(ctx context.Context, limit int64) ([]models
 	findOptions := options.Find().SetLimit(limit)
 	cursor, err := r.collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch goals: %v", err)
+		logger.Log.WithError(err).Error("Failed to fetch all goals")
+		return nil, err
 	}
 	defer cursor.Close(ctx)
 
 	for cursor.Next(ctx) {
 		var goal models.Goal
 		if err := cursor.Decode(&goal); err != nil {
-			return nil, fmt.Errorf("failed to decode goal: %v", err)
+			logger.Log.WithError(err).Error("Failed to decode goal")
+			return nil, err
 		}
 		goals = append(goals, goal)
 	}
 
+	logger.Log.WithField("count", len(goals)).Info("All goals fetched successfully")
 	return goals, nil
 }
 
@@ -118,17 +130,24 @@ func (r *GoalRepository) GetGoals(ctx context.Context, userID primitive.ObjectID
 
 	cursor, err := r.collection.Find(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch goals: %v", err)
+		logger.Log.WithError(err).WithField("user_id", userID.Hex()).Error("Failed to fetch filtered goals")
+		return nil, err
 	}
 	defer cursor.Close(ctx)
 
 	for cursor.Next(ctx) {
 		var goal models.Goal
 		if err := cursor.Decode(&goal); err != nil {
-			return nil, fmt.Errorf("failed to decode goal: %v", err)
+			logger.Log.WithError(err).Error("Failed to decode filtered goal")
+			return nil, err
 		}
 		goals = append(goals, goal)
 	}
+
+	logger.Log.WithFields(map[string]interface{}{
+		"user_id": userID.Hex(),
+		"count":   len(goals),
+	}).Info("Filtered goals fetched successfully")
 
 	return goals, nil
 }
