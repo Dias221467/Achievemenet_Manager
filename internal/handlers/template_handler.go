@@ -9,17 +9,22 @@ import (
 	"github.com/Dias221467/Achievemenet_Manager/internal/services"
 	"github.com/Dias221467/Achievemenet_Manager/pkg/logger"
 	"github.com/Dias221467/Achievemenet_Manager/pkg/middleware"
+	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // TemplateHandler handles HTTP requests related to goal templates.
 type TemplateHandler struct {
-	Service *services.TemplateService
+	TemplateService *services.TemplateService
+	GoalService     *services.GoalService
 }
 
 // NewTemplateHandler creates a new instance of TemplateHandler.
-func NewTemplateHandler(service *services.TemplateService) *TemplateHandler {
-	return &TemplateHandler{Service: service}
+func NewTemplateHandler(templateService *services.TemplateService, goalService *services.GoalService) *TemplateHandler {
+	return &TemplateHandler{
+		TemplateService: templateService,
+		GoalService:     goalService,
+	}
 }
 
 // CreateTemplateHandler allows a user to create a goal template.
@@ -55,7 +60,7 @@ func (h *TemplateHandler) CreateTemplateHandler(w http.ResponseWriter, r *http.R
 	template.UserID = userID
 	template.CreatedAt = time.Now()
 
-	createdTemplate, err := h.Service.CreateTemplate(r.Context(), &template)
+	createdTemplate, err := h.TemplateService.CreateTemplate(r.Context(), &template)
 	if err != nil {
 		http.Error(w, "Failed to create template", http.StatusInternalServerError)
 		logger.Log.Errorf("Error creating template: %v", err)
@@ -83,7 +88,7 @@ func (h *TemplateHandler) GetTemplatesHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	templates, err := h.Service.GetTemplatesByUser(r.Context(), userID)
+	templates, err := h.TemplateService.GetTemplatesByUser(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "Failed to fetch templates", http.StatusInternalServerError)
 		logger.Log.Errorf("Error fetching templates for user %s: %v", claims.UserID, err)
@@ -93,4 +98,71 @@ func (h *TemplateHandler) GetTemplatesHandler(w http.ResponseWriter, r *http.Req
 	logger.Log.Infof("Fetched %d templates for user %s", len(templates), claims.UserID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(templates)
+}
+
+func (h *TemplateHandler) GetTemplateByIDHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	templateID := vars["id"]
+
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		logger.Log.Warn("Unauthorized access to template by ID")
+		return
+	}
+
+	// Parse ObjectID
+	objID, err := primitive.ObjectIDFromHex(templateID)
+	if err != nil {
+		http.Error(w, "Invalid template ID", http.StatusBadRequest)
+		logger.Log.Warnf("Invalid template ID: %v", err)
+		return
+	}
+
+	template, err := h.TemplateService.GetTemplateByID(r.Context(), objID.Hex())
+	if err != nil {
+		http.Error(w, "Template not found", http.StatusNotFound)
+		logger.Log.Warnf("Template not found: %v", err)
+		return
+	}
+
+	// Make sure only the owner can view it (or add sharing logic later)
+	if template.UserID.Hex() != claims.UserID {
+		http.Error(w, "Forbidden: You can only view your own templates", http.StatusForbidden)
+		logger.Log.Warnf("User %s tried to access template %s they do not own", claims.UserID, templateID)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(template)
+}
+
+func (h *TemplateHandler) CopyTemplateHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	templateID := vars["id"]
+
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		logger.Log.Warn("Unauthorized attempt to copy template")
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		logger.Log.Errorf("Failed to parse user ID: %v", err)
+		return
+	}
+
+	goal, err := h.TemplateService.CopyTemplateToGoal(r.Context(), templateID, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		logger.Log.Errorf("Failed to copy template: %v", err)
+		return
+	}
+
+	logger.Log.Infof("User %s copied template %s into goal %s", claims.UserID, templateID, goal.ID.Hex())
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(goal)
 }

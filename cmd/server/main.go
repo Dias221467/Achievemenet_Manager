@@ -38,6 +38,11 @@ func main() {
 	userService := services.NewUserService(userRepo)
 	userHandler := handlers.NewUserHandler(userService, cfg)
 
+	// Initialize repository and service for templates
+	templateRepo := repository.NewTemplateRepository(db)
+	templateService := services.NewTemplateService(templateRepo, goalRepo) // <- inject goalRepo
+	templateHandler := handlers.NewTemplateHandler(templateService, goalService)
+
 	// Initialize Gorilla Mux router
 	router := mux.NewRouter()
 
@@ -61,6 +66,13 @@ func main() {
 	protectedUserRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	protectedUserRoutes.HandleFunc("/{id}", userHandler.GetUserHandler).Methods("GET")
 	protectedUserRoutes.HandleFunc("/{id}", userHandler.UpdateUserHandler).Methods("PUT")
+
+	// Template-related routes
+	protectedTemplateRoutes := router.PathPrefix("/templates").Subrouter()
+	protectedTemplateRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	protectedTemplateRoutes.HandleFunc("", templateHandler.CreateTemplateHandler).Methods("POST")
+	protectedTemplateRoutes.HandleFunc("", templateHandler.GetTemplatesHandler).Methods("GET")
+	protectedTemplateRoutes.HandleFunc("/{id}/copy", templateHandler.CopyTemplateHandler).Methods("POST")
 
 	// Apply middleware for logging
 	router.Use(middleware.LoggingMiddleware)
