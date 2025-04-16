@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Dias221467/Achievemenet_Manager/internal/models"
 	"github.com/Dias221467/Achievemenet_Manager/internal/repository"
@@ -10,11 +11,15 @@ import (
 )
 
 type TemplateService struct {
-	repo *repository.TemplateRepository
+	repo     *repository.TemplateRepository
+	goalRepo *repository.GoalRepository
 }
 
-func NewTemplateService(repo *repository.TemplateRepository) *TemplateService {
-	return &TemplateService{repo: repo}
+func NewTemplateService(repo *repository.TemplateRepository, goalRepo *repository.GoalRepository) *TemplateService {
+	return &TemplateService{
+		repo:     repo,
+		goalRepo: goalRepo,
+	}
 }
 
 // CreateTemplate creates a new goal template
@@ -41,4 +46,34 @@ func (s *TemplateService) GetTemplateByID(ctx context.Context, id string) (*mode
 
 func (s *TemplateService) GetTemplatesByUser(ctx context.Context, userID primitive.ObjectID) ([]models.GoalTemplate, error) {
 	return s.repo.GetTemplatesByUser(ctx, userID)
+}
+
+func (s *TemplateService) CopyTemplateToGoal(ctx context.Context, templateID string, userID primitive.ObjectID) (*models.Goal, error) {
+	objID, err := primitive.ObjectIDFromHex(templateID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid template ID")
+	}
+
+	template, err := s.repo.GetTemplateByID(ctx, objID)
+	if err != nil {
+		return nil, fmt.Errorf("template not found: %v", err)
+	}
+
+	goal := &models.Goal{
+		Name:        template.Title,
+		Description: template.Description,
+		Steps:       template.Steps,
+		Category:    template.Category,
+		UserID:      userID,
+		Progress:    map[string]bool{},
+		Status:      "in_progress",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	for _, step := range goal.Steps {
+		goal.Progress[step] = false
+	}
+
+	return s.goalRepo.CreateGoal(ctx, goal)
 }
