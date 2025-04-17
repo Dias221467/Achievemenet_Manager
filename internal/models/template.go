@@ -13,5 +13,6 @@ type GoalTemplate struct {
 	Steps       []string           `json:"steps" bson:"steps"`
 	Category    string             `json:"category,omitempty" bson:"category,omitempty"`
 	UserID      primitive.ObjectID `json:"user_id" bson:"user_id"`
+	Public      bool               `json:"public" bson:"public"` // New: indicates if template is public
 	CreatedAt   time.Time          `json:"created_at" bson:"created_at"`
 }

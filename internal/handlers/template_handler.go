@@ -166,3 +166,66 @@ func (h *TemplateHandler) CopyTemplateHandler(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(goal)
 }
+
+func (h *TemplateHandler) GetPublicTemplatesHandler(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		logger.Log.Warn("Unauthorized attempt to fetch public templates")
+		return
+	}
+
+	templates, err := h.TemplateService.GetPublicTemplates(r.Context())
+	if err != nil {
+		http.Error(w, "Failed to fetch public templates", http.StatusInternalServerError)
+		logger.Log.Errorf("Error fetching public templates: %v", err)
+		return
+	}
+
+	logger.Log.Infof("User %s fetched %d public templates", claims.UserID, len(templates))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(templates)
+}
+
+func (h *TemplateHandler) GetTemplatesByUserHandler(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		logger.Log.Warn("Unauthorized request to get templates by user")
+		return
+	}
+
+	vars := mux.Vars(r)
+	requestedUserID := vars["id"]
+	userID, err := primitive.ObjectIDFromHex(requestedUserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		logger.Log.Warnf("Invalid user ID: %v", err)
+		return
+	}
+
+	// Parse optional ?public=true query param
+	publicOnly := r.URL.Query().Get("public") == "true"
+
+	var templates []models.GoalTemplate
+
+	if publicOnly {
+		templates, err = h.TemplateService.GetPublicTemplatesByUser(r.Context(), userID)
+	} else if claims.UserID == requestedUserID {
+		templates, err = h.TemplateService.GetTemplatesByUser(r.Context(), userID)
+	} else {
+		http.Error(w, "Forbidden: You can only view your own private templates", http.StatusForbidden)
+		logger.Log.Warnf("User %s attempted to access private templates of user %s", claims.UserID, requestedUserID)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, "Failed to retrieve templates", http.StatusInternalServerError)
+		logger.Log.Errorf("Failed to get templates for user %s: %v", requestedUserID, err)
+		return
+	}
+
+	logger.Log.Infof("User %s fetched %d templates for user %s", claims.UserID, len(templates), requestedUserID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(templates)
+}

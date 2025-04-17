@@ -77,3 +77,11 @@ func (s *TemplateService) CopyTemplateToGoal(ctx context.Context, templateID str
 
 	return s.goalRepo.CreateGoal(ctx, goal)
 }
+
+func (s *TemplateService) GetPublicTemplates(ctx context.Context) ([]models.GoalTemplate, error) {
+	return s.repo.GetPublicTemplates(ctx)
+}
+
+func (s *TemplateService) GetPublicTemplatesByUser(ctx context.Context, userID primitive.ObjectID) ([]models.GoalTemplate, error) {
+	return s.repo.GetPublicTemplatesByUser(ctx, userID)
+}
