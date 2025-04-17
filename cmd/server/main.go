@@ -73,6 +73,8 @@ func main() {
 	protectedTemplateRoutes.HandleFunc("", templateHandler.CreateTemplateHandler).Methods("POST")
 	protectedTemplateRoutes.HandleFunc("", templateHandler.GetTemplatesHandler).Methods("GET")
 	protectedTemplateRoutes.HandleFunc("/{id}/copy", templateHandler.CopyTemplateHandler).Methods("POST")
+	protectedTemplateRoutes.HandleFunc("/public", templateHandler.GetPublicTemplatesHandler).Methods("GET")
+	protectedTemplateRoutes.HandleFunc("/user/{id}", templateHandler.GetTemplatesByUserHandler).Methods("GET")
 
 	// Apply middleware for logging
 	router.Use(middleware.LoggingMiddleware)

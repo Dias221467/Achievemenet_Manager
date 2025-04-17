@@ -92,3 +92,50 @@ func (r *TemplateRepository) GetTemplatesByUser(ctx context.Context, userID prim
 
 	return templates, nil
 }
+
+// GetPublicTemplates returns all public templates
+func (r *TemplateRepository) GetPublicTemplates(ctx context.Context) ([]models.GoalTemplate, error) {
+	var templates []models.GoalTemplate
+
+	filter := bson.M{"public": true}
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch public templates: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var template models.GoalTemplate
+		if err := cursor.Decode(&template); err != nil {
+			return nil, fmt.Errorf("failed to decode template: %v", err)
+		}
+		templates = append(templates, template)
+	}
+
+	return templates, nil
+}
+
+// GetPublicTemplatesByUser fetches public templates created by a specific user.
+func (r *TemplateRepository) GetPublicTemplatesByUser(ctx context.Context, userID primitive.ObjectID) ([]models.GoalTemplate, error) {
+	var templates []models.GoalTemplate
+	filter := bson.M{
+		"user_id": userID,
+		"public":  true,
+	}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch public templates for user: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var template models.GoalTemplate
+		if err := cursor.Decode(&template); err != nil {
+			return nil, fmt.Errorf("failed to decode template: %v", err)
+		}
+		templates = append(templates, template)
+	}
+
+	return templates, nil
+}
