@@ -110,3 +110,25 @@ func (r *UserRepository) DeleteUser(ctx context.Context, id primitive.ObjectID) 
 	logrus.WithField("userID", id.Hex()).Info("User deleted successfully")
 	return nil
 }
+
+func (r *UserRepository) AddFriend(ctx context.Context, userID, friendID primitive.ObjectID) error {
+	_, err := r.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": userID},
+		bson.M{"$addToSet": bson.M{"friends": friendID}}, // avoid duplicates
+	)
+	if err != nil {
+		return fmt.Errorf("failed to add friend: %v", err)
+	}
+	return nil
+}
+
+// GetFriendIDs returns the list of friends for a user
+func (r *UserRepository) GetFriendIDs(ctx context.Context, userID primitive.ObjectID) ([]primitive.ObjectID, error) {
+	var user models.User
+	err := r.collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user for friend list: %v", err)
+	}
+	return user.Friends, nil
+}
