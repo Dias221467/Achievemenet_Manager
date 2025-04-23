@@ -43,6 +43,11 @@ func main() {
 	templateService := services.NewTemplateService(templateRepo, goalRepo) // <- inject goalRepo
 	templateHandler := handlers.NewTemplateHandler(templateService, goalService)
 
+	// Initialize repositories, services, and handlers for friends
+	friendRepo := repository.NewFriendRepository(db)
+	friendService := services.NewFriendService(friendRepo, userRepo)
+	friendHandler := handlers.NewFriendHandler(friendService)
+
 	// Initialize Gorilla Mux router
 	router := mux.NewRouter()
 
@@ -75,6 +80,15 @@ func main() {
 	protectedTemplateRoutes.HandleFunc("/{id}/copy", templateHandler.CopyTemplateHandler).Methods("POST")
 	protectedTemplateRoutes.HandleFunc("/public", templateHandler.GetPublicTemplatesHandler).Methods("GET")
 	protectedTemplateRoutes.HandleFunc("/user/{id}", templateHandler.GetTemplatesByUserHandler).Methods("GET")
+
+	// Friend routes
+	ProtectedFriendRoutes := router.PathPrefix("/friends").Subrouter()
+	ProtectedFriendRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+
+	ProtectedFriendRoutes.HandleFunc("/{id}/request", friendHandler.SendFriendRequestHandler).Methods("POST")
+	ProtectedFriendRoutes.HandleFunc("/requests", friendHandler.GetPendingRequestsHandler).Methods("GET")
+	ProtectedFriendRoutes.HandleFunc("/requests/{id}/respond", friendHandler.RespondToFriendRequestHandler).Methods("POST")
+	ProtectedFriendRoutes.HandleFunc("", friendHandler.GetFriendsHandler).Methods("GET")
 
 	// Apply middleware for logging
 	router.Use(middleware.LoggingMiddleware)
