@@ -28,25 +28,23 @@ func main() {
 		log.Fatalf("Database connection error: %v", err)
 	}
 
-	// Initialize repositories, services, and handlers for goals
-	goalRepo := repository.NewGoalRepository(db)
-	goalService := services.NewGoalService(goalRepo)
-	goalHandler := handlers.NewGoalHandler(goalService)
-
-	// Initialize repositories, services, and handlers for users
+	// --- Repositories ---
 	userRepo := repository.NewUserRepository(db)
-	userService := services.NewUserService(userRepo)
-	userHandler := handlers.NewUserHandler(userService, cfg)
-
-	// Initialize repository and service for templates
-	templateRepo := repository.NewTemplateRepository(db)
-	templateService := services.NewTemplateService(templateRepo, goalRepo) // <- inject goalRepo
-	templateHandler := handlers.NewTemplateHandler(templateService, goalService)
-
-	// Initialize repositories, services, and handlers for friends
+	goalRepo := repository.NewGoalRepository(db)
 	friendRepo := repository.NewFriendRepository(db)
+	templateRepo := repository.NewTemplateRepository(db)
+
+	// --- Services ---
+	userService := services.NewUserService(userRepo)
+	goalService := services.NewGoalService(goalRepo, userRepo)
 	friendService := services.NewFriendService(friendRepo, userRepo)
+	templateService := services.NewTemplateService(templateRepo, goalRepo)
+
+	// --- Handlers ---
+	userHandler := handlers.NewUserHandler(userService, cfg)
+	goalHandler := handlers.NewGoalHandler(goalService)
 	friendHandler := handlers.NewFriendHandler(friendService)
+	templateHandler := handlers.NewTemplateHandler(templateService, goalService)
 
 	// Initialize Gorilla Mux router
 	router := mux.NewRouter()
@@ -61,6 +59,7 @@ func main() {
 	protectedRoutes.HandleFunc("/{id}/progress", goalHandler.UpdateGoalProgressHandler).Methods("PATCH")
 	protectedRoutes.HandleFunc("/{id}/progress", goalHandler.GetGoalProgressHandler).Methods("GET")
 	protectedRoutes.HandleFunc("", goalHandler.GetGoalsHandler).Methods("GET")
+	protectedRoutes.HandleFunc("/{id}/invite", goalHandler.InviteCollaboratorHandler).Methods("POST")
 
 	// Register User routes
 	router.HandleFunc("/users/register", userHandler.RegisterUserHandler).Methods("POST")
@@ -82,13 +81,13 @@ func main() {
 	protectedTemplateRoutes.HandleFunc("/user/{id}", templateHandler.GetTemplatesByUserHandler).Methods("GET")
 
 	// Friend routes
-	ProtectedFriendRoutes := router.PathPrefix("/friends").Subrouter()
-	ProtectedFriendRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	protectedFriendRoutes := router.PathPrefix("/friends").Subrouter()
+	protectedFriendRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 
-	ProtectedFriendRoutes.HandleFunc("/{id}/request", friendHandler.SendFriendRequestHandler).Methods("POST")
-	ProtectedFriendRoutes.HandleFunc("/requests", friendHandler.GetPendingRequestsHandler).Methods("GET")
-	ProtectedFriendRoutes.HandleFunc("/requests/{id}/respond", friendHandler.RespondToFriendRequestHandler).Methods("POST")
-	ProtectedFriendRoutes.HandleFunc("", friendHandler.GetFriendsHandler).Methods("GET")
+	protectedFriendRoutes.HandleFunc("/{id}/request", friendHandler.SendFriendRequestHandler).Methods("POST")
+	protectedFriendRoutes.HandleFunc("/requests", friendHandler.GetPendingRequestsHandler).Methods("GET")
+	protectedFriendRoutes.HandleFunc("/requests/{id}/respond", friendHandler.RespondToFriendRequestHandler).Methods("POST")
+	protectedFriendRoutes.HandleFunc("", friendHandler.GetFriendsHandler).Methods("GET")
 
 	// Apply middleware for logging
 	router.Use(middleware.LoggingMiddleware)

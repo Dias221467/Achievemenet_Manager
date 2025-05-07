@@ -151,3 +151,28 @@ func (r *GoalRepository) GetGoals(ctx context.Context, userID primitive.ObjectID
 
 	return goals, nil
 }
+
+// AddCollaborator adds a collaborator to a goal by updating the collaborators array.
+func (r *GoalRepository) AddCollaborator(ctx context.Context, goalID, collaboratorID primitive.ObjectID) error {
+	filter := bson.M{"_id": goalID}
+	update := bson.M{
+		"$addToSet": bson.M{"collaborators": collaboratorID}, // Prevents duplicates
+		"$set":      bson.M{"updated_at": time.Now()},
+	}
+
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		logger.Log.WithError(err).WithFields(map[string]interface{}{
+			"goal_id":         goalID.Hex(),
+			"collaborator_id": collaboratorID.Hex(),
+		}).Error("Failed to add collaborator to goal")
+		return err
+	}
+
+	logger.Log.WithFields(map[string]interface{}{
+		"goal_id":         goalID.Hex(),
+		"collaborator_id": collaboratorID.Hex(),
+	}).Info("Collaborator successfully added to goal")
+
+	return nil
+}

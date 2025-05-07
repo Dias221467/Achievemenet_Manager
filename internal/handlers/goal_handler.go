@@ -8,6 +8,7 @@ import (
 
 	"github.com/Dias221467/Achievemenet_Manager/internal/models"
 	"github.com/Dias221467/Achievemenet_Manager/internal/services"
+	"github.com/Dias221467/Achievemenet_Manager/pkg/logger"
 	"github.com/Dias221467/Achievemenet_Manager/pkg/middleware"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -474,4 +475,54 @@ func (h *GoalHandler) GetGoalsHandler(w http.ResponseWriter, r *http.Request) {
 	log.WithField("goalCount", len(goals)).Info("User goals fetched successfully")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(goals)
+}
+
+func (h *GoalHandler) InviteCollaboratorHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	goalID := vars["id"]
+
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		logger.Log.Warn("Unauthorized attempt to invite collaborator")
+		return
+	}
+
+	requesterID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		logger.Log.Errorf("Invalid user ID format: %v", err)
+		return
+	}
+
+	// Parse body to get collaboratorID
+	var req struct {
+		CollaboratorID string `json:"collaborator_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		logger.Log.Warn("Invalid request payload for collaborator invite")
+		return
+	}
+	defer r.Body.Close()
+
+	collaboratorID, err := primitive.ObjectIDFromHex(req.CollaboratorID)
+	if err != nil {
+		http.Error(w, "Invalid collaborator ID", http.StatusBadRequest)
+		logger.Log.Warnf("Invalid collaborator ID: %v", err)
+		return
+	}
+
+	err = h.Service.InviteCollaborator(r.Context(), goalID, requesterID, collaboratorID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		logger.Log.Warnf("Failed to invite collaborator: %v", err)
+		return
+	}
+
+	logger.Log.Infof("User %s invited %s to collaborate on goal %s", claims.UserID, req.CollaboratorID, goalID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Collaborator successfully invited",
+	})
 }

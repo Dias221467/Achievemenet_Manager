@@ -33,7 +33,8 @@ func setupTestRouter() (*mux.Router, *mongo.Database, context.Context, func()) {
 
 	// Initialize repository, service, and handler.
 	goalRepo := repository.NewGoalRepository(db)
-	goalService := services.NewGoalService(goalRepo)
+	userRepo := repository.NewUserRepository(db)
+	goalService := services.NewGoalService(goalRepo, userRepo)
 	goalHandler := NewGoalHandler(goalService)
 
 	// Set up router and register routes.
@@ -89,6 +90,7 @@ func TestGetGoalHandler(t *testing.T) {
 	defer cleanup()
 
 	// Insert a goal directly using repository for testing the GET handler.
+	userRepo := repository.NewUserRepository(db)
 	goalRepo := repository.NewGoalRepository(db)
 	goal := &models.Goal{
 		Name:        "Test Goal for GET",
@@ -111,7 +113,7 @@ func TestGetGoalHandler(t *testing.T) {
 	rr := httptest.NewRecorder()
 	// Since our router uses mux, we need to set the route variables.
 	router = mux.NewRouter()
-	router.HandleFunc("/goals/{id}", NewGoalHandler(services.NewGoalService(goalRepo)).GetGoalHandler).Methods("GET")
+	router.HandleFunc("/goals/{id}", NewGoalHandler(services.NewGoalService(goalRepo, userRepo)).GetGoalHandler).Methods("GET")
 	router.ServeHTTP(rr, req)
 
 	// Assert status code.
