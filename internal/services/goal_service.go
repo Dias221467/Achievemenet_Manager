@@ -12,13 +12,15 @@ import (
 
 // GoalService encapsulates the business logic for goals.
 type GoalService struct {
-	repo *repository.GoalRepository
+	repo     *repository.GoalRepository
+	userRepo *repository.UserRepository
 }
 
 // NewGoalService creates a new instance of GoalService.
-func NewGoalService(repo *repository.GoalRepository) *GoalService {
+func NewGoalService(repo *repository.GoalRepository, userRepo *repository.UserRepository) *GoalService {
 	return &GoalService{
-		repo: repo,
+		repo:     repo,
+		userRepo: userRepo,
 	}
 }
 
@@ -120,4 +122,51 @@ func (s *GoalService) GetGoals(ctx context.Context, userID primitive.ObjectID, c
 		"count":    len(goals),
 	}).Info("Filtered goals fetched in service layer")
 	return goals, nil
+}
+
+// InviteCollaborator adds a user as a collaborator to a goal if the requester is the owner.
+func (s *GoalService) InviteCollaborator(ctx context.Context, goalID string, requesterID, collaboratorID primitive.ObjectID) error {
+	objID, err := primitive.ObjectIDFromHex(goalID)
+	if err != nil {
+		return fmt.Errorf("invalid goal ID: %v", err)
+	}
+
+	goal, err := s.repo.GetGoalByID(ctx, objID)
+	if err != nil {
+		return fmt.Errorf("goal not found: %v", err)
+	}
+
+	// Only the owner can invite collaborators
+	if goal.UserID != requesterID {
+		return fmt.Errorf("only the owner can invite collaborators")
+	}
+
+	// Prevent inviting self or duplicate
+	if collaboratorID == requesterID {
+		return fmt.Errorf("you cannot invite yourself")
+	}
+	for _, existing := range goal.Collaborators {
+		if existing == collaboratorID {
+			return fmt.Errorf("user is already a collaborator")
+		}
+	}
+
+	//Check if they are friends (important!)
+	friendIDs, err := s.userRepo.GetFriendIDs(ctx, requesterID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch friend list: %v", err)
+	}
+
+	isFriend := false
+	for _, id := range friendIDs {
+		if id == collaboratorID {
+			isFriend = true
+			break
+		}
+	}
+	if !isFriend {
+		return fmt.Errorf("you can only invite your friends")
+	}
+
+	return s.repo.AddCollaborator(ctx, objID, collaboratorID)
 }
