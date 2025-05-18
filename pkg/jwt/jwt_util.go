@@ -10,14 +10,16 @@ import (
 type Claims struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
+	Role   string `json:"role"` // <- NEW: Include role
 	jwt.RegisteredClaims
 }
 
 // GenerateToken creates a new JWT token for the given user.
-func GenerateToken(userID, email, secret string, expiry time.Duration) (string, error) {
+func GenerateToken(userID, email, role, secret string, expiry time.Duration) (string, error) {
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
+		Role:   role, // <- include role in token
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

@@ -111,6 +111,25 @@ func (r *UserRepository) DeleteUser(ctx context.Context, id primitive.ObjectID) 
 	return nil
 }
 
+func (r *UserRepository) GetAllUsers(ctx context.Context) ([]*models.User, error) {
+	cursor, err := r.collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch users: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	var users []*models.User
+	for cursor.Next(ctx) {
+		var user models.User
+		if err := cursor.Decode(&user); err != nil {
+			return nil, fmt.Errorf("failed to decode user: %v", err)
+		}
+		users = append(users, &user)
+	}
+
+	return users, nil
+}
+
 func (r *UserRepository) AddFriend(ctx context.Context, userID, friendID primitive.ObjectID) error {
 	_, err := r.collection.UpdateOne(
 		ctx,

@@ -52,6 +52,10 @@ func (s *UserService) RegisterUser(ctx context.Context, user *models.User) (*mod
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
 
+	if user.Role == "" {
+		user.Role = "user"
+	}
+
 	// Create the user in the repository.
 	createdUser, err := s.repo.CreateUser(ctx, user)
 	if err != nil {
@@ -59,7 +63,11 @@ func (s *UserService) RegisterUser(ctx context.Context, user *models.User) (*mod
 		return nil, fmt.Errorf("failed to register user: %v", err)
 	}
 
-	logrus.WithField("userID", createdUser.ID.Hex()).Info("User registered successfully")
+	logrus.WithFields(logrus.Fields{
+		"userID": createdUser.ID.Hex(),
+		"role":   createdUser.Role,
+	}).Info("User registered successfully")
+
 	return createdUser, nil
 }
 
@@ -142,4 +150,8 @@ func (s *UserService) DeleteUser(ctx context.Context, id string) error {
 
 	logrus.WithField("userID", id).Info("User deleted successfully")
 	return nil
+}
+
+func (s *UserService) GetAllUsers(ctx context.Context) ([]*models.User, error) {
+	return s.repo.GetAllUsers(ctx)
 }

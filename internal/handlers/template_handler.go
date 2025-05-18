@@ -229,3 +229,29 @@ func (h *TemplateHandler) GetTemplatesByUserHandler(w http.ResponseWriter, r *ht
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(templates)
 }
+
+func (h *TemplateHandler) AdminGetAllTemplatesHandler(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		logger.Log.Warn("Unauthorized attempt to access all templates")
+		return
+	}
+
+	if claims.Role != "admin" {
+		http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
+		logger.Log.Warnf("User %s attempted to access admin-only endpoint", claims.UserID)
+		return
+	}
+
+	templates, err := h.TemplateService.GetAllTemplates(r.Context())
+	if err != nil {
+		http.Error(w, "Failed to fetch templates", http.StatusInternalServerError)
+		logger.Log.Errorf("Admin failed to fetch all templates: %v", err)
+		return
+	}
+
+	logger.Log.Infof("Admin %s fetched %d templates", claims.UserID, len(templates))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(templates)
+}

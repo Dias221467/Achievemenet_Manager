@@ -8,6 +8,7 @@ import (
 	"github.com/Dias221467/Achievemenet_Manager/internal/models"
 	"github.com/Dias221467/Achievemenet_Manager/internal/services"
 	jwtutil "github.com/Dias221467/Achievemenet_Manager/pkg/jwt"
+	"github.com/Dias221467/Achievemenet_Manager/pkg/logger"
 	"github.com/Dias221467/Achievemenet_Manager/pkg/middleware"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -74,7 +75,7 @@ func (h *UserHandler) LoginUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate a JWT token
-	token, err := jwtutil.GenerateToken(user.ID.Hex(), user.Email, h.Config.JWTSecret, h.Config.TokenExpiry)
+	token, err := jwtutil.GenerateToken(user.ID.Hex(), user.Email, user.Role, h.Config.JWTSecret, h.Config.TokenExpiry)
 	if err != nil {
 		log.WithError(err).Error("Failed to generate JWT token")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
@@ -176,4 +177,30 @@ func (h *UserHandler) UpdateUserHandler(w http.ResponseWriter, r *http.Request) 
 	log.WithField("userID", updatedUserData.ID.Hex()).Info("User updated successfully")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updatedUserData)
+}
+
+func (h *UserHandler) AdminGetAllUsersHandler(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		logger.Log.Warn("Unauthorized attempt to fetch all users")
+		return
+	}
+
+	if claims.Role != "admin" {
+		http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
+		logger.Log.Warnf("User %s attempted to access admin-only user list", claims.UserID)
+		return
+	}
+
+	users, err := h.Service.GetAllUsers(r.Context())
+	if err != nil {
+		http.Error(w, "Failed to retrieve users", http.StatusInternalServerError)
+		logger.Log.Errorf("Admin %s failed to fetch users: %v", claims.UserID, err)
+		return
+	}
+
+	logger.Log.Infof("Admin %s fetched %d users", claims.UserID, len(users))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
 }

@@ -13,6 +13,7 @@ type User struct {
 	Username       string               `bson:"username"`
 	Email          string               `bson:"email"`
 	HashedPassword string               `json:"hashed_password"`
+	Role           string               `bson:"role" json:"role"`
 	CreatedAt      time.Time            `bson:"created_at"`
 	UpdatedAt      time.Time            `bson:"updated_at"`
 }
