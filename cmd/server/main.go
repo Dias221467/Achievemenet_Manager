@@ -13,6 +13,7 @@ import (
 	"github.com/Dias221467/Achievemenet_Manager/pkg/logger"
 	"github.com/Dias221467/Achievemenet_Manager/pkg/middleware"
 	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -89,11 +90,28 @@ func main() {
 	protectedFriendRoutes.HandleFunc("/requests/{id}/respond", friendHandler.RespondToFriendRequestHandler).Methods("POST")
 	protectedFriendRoutes.HandleFunc("", friendHandler.GetFriendsHandler).Methods("GET")
 
+	// Admin routes
+	adminRoutes := router.PathPrefix("/admin").Subrouter()
+	adminRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	adminRoutes.Use(middleware.RequireRole("admin"))
+	adminRoutes.HandleFunc("/goals", goalHandler.GetAllGoalsHandler).Methods("GET")
+	adminRoutes.HandleFunc("/templates", templateHandler.AdminGetAllTemplatesHandler).Methods("GET")
+	adminRoutes.HandleFunc("/users", userHandler.AdminGetAllUsersHandler).Methods("GET")
+
 	// Apply middleware for logging
 	router.Use(middleware.LoggingMiddleware)
 
 	// Start the HTTP server
 	port := cfg.Port
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000"}, // adjust to frontend origin
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowCredentials: true,
+	})
+
+	handler := c.Handler(router)
+
 	fmt.Printf("Server running on port %s\n", port)
-	log.Fatal(http.ListenAndServe(":"+port, router))
+	log.Fatal(http.ListenAndServe(":"+port, handler))
 }
