@@ -17,3 +17,9 @@ type User struct {
 	CreatedAt      time.Time            `bson:"created_at"`
 	UpdatedAt      time.Time            `bson:"updated_at"`
 }
+
+type PublicUser struct {
+	ID       primitive.ObjectID `json:"id"`
+	Username string             `json:"username"`
+	Email    string             `json:"email"`
+}

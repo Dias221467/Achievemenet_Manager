@@ -118,12 +118,19 @@ func (r *GoalRepository) GetAllGoals(ctx context.Context, limit int64) ([]models
 	return goals, nil
 }
 
-// GetGoals fetches goals for a specific user with an optional category filter
+// GetGoals fetches goals for a specific user with an optional category filter.
+// It includes both owned and collaborated goals.
 func (r *GoalRepository) GetGoals(ctx context.Context, userID primitive.ObjectID, category string) ([]models.Goal, error) {
 	var goals []models.Goal
 
-	// Build the filter for MongoDB query
-	filter := bson.M{"user_id": userID}
+	// Build the filter to include either owned or collaborated goals
+	filter := bson.M{
+		"$or": []bson.M{
+			{"user_id": userID},
+			{"collaborators": userID},
+		},
+	}
+
 	if category != "" {
 		filter["category"] = category
 	}
@@ -147,7 +154,7 @@ func (r *GoalRepository) GetGoals(ctx context.Context, userID primitive.ObjectID
 	logger.Log.WithFields(map[string]interface{}{
 		"user_id": userID.Hex(),
 		"count":   len(goals),
-	}).Info("Filtered goals fetched successfully")
+	}).Info("Filtered goals (owned and collaborated) fetched successfully")
 
 	return goals, nil
 }
