@@ -140,3 +140,34 @@ func (h *FriendHandler) GetFriendsHandler(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(friends)
 }
+
+func (h *FriendHandler) RemoveFriendHandler(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	friendID := vars["id"]
+
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		return
+	}
+
+	friendObjID, err := primitive.ObjectIDFromHex(friendID)
+	if err != nil {
+		http.Error(w, "Invalid friend ID", http.StatusBadRequest)
+		return
+	}
+
+	err = h.Service.RemoveFriend(r.Context(), userID, friendObjID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -89,6 +89,7 @@ func main() {
 	protectedFriendRoutes.HandleFunc("/requests", friendHandler.GetPendingRequestsHandler).Methods("GET")
 	protectedFriendRoutes.HandleFunc("/requests/{id}/respond", friendHandler.RespondToFriendRequestHandler).Methods("POST")
 	protectedFriendRoutes.HandleFunc("", friendHandler.GetFriendsHandler).Methods("GET")
+	protectedFriendRoutes.HandleFunc("/{id}", friendHandler.RemoveFriendHandler).Methods("DELETE")
 
 	// Admin routes
 	adminRoutes := router.PathPrefix("/admin").Subrouter()
