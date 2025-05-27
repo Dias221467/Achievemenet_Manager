@@ -72,30 +72,28 @@ func (h *TemplateHandler) CreateTemplateHandler(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(createdTemplate)
 }
 
-// GetTemplatesHandler allows a user to fetch their own templates.
-func (h *TemplateHandler) GetTemplatesHandler(w http.ResponseWriter, r *http.Request) {
+func (h *TemplateHandler) AdminGetAllTemplatesHandler(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetUserFromContext(r.Context())
 	if claims == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		logger.Log.Warn("Unauthorized attempt to fetch templates")
+		logger.Log.Warn("Unauthorized attempt to access all templates")
 		return
 	}
 
-	userID, err := primitive.ObjectIDFromHex(claims.UserID)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
-		logger.Log.Errorf("Failed to parse user ID: %v", err)
+	if claims.Role != "admin" {
+		http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
+		logger.Log.Warnf("User %s attempted to access admin-only endpoint", claims.UserID)
 		return
 	}
 
-	templates, err := h.TemplateService.GetTemplatesByUser(r.Context(), userID)
+	templates, err := h.TemplateService.GetAllTemplates(r.Context())
 	if err != nil {
 		http.Error(w, "Failed to fetch templates", http.StatusInternalServerError)
-		logger.Log.Errorf("Error fetching templates for user %s: %v", claims.UserID, err)
+		logger.Log.Errorf("Admin failed to fetch all templates: %v", err)
 		return
 	}
 
-	logger.Log.Infof("Fetched %d templates for user %s", len(templates), claims.UserID)
+	logger.Log.Infof("Admin %s fetched %d templates", claims.UserID, len(templates))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(templates)
 }
@@ -167,6 +165,34 @@ func (h *TemplateHandler) CopyTemplateHandler(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(goal)
 }
 
+// GetTemplatesHandler allows a user to fetch their own templates.
+func (h *TemplateHandler) GetTemplatesHandler(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetUserFromContext(r.Context())
+	if claims == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		logger.Log.Warn("Unauthorized attempt to fetch templates")
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		logger.Log.Errorf("Failed to parse user ID: %v", err)
+		return
+	}
+
+	templates, err := h.TemplateService.GetTemplatesByUser(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "Failed to fetch templates", http.StatusInternalServerError)
+		logger.Log.Errorf("Error fetching templates for user %s: %v", claims.UserID, err)
+		return
+	}
+
+	logger.Log.Infof("Fetched %d templates for user %s", len(templates), claims.UserID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(templates)
+}
+
 func (h *TemplateHandler) GetPublicTemplatesHandler(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetUserFromContext(r.Context())
 	if claims == nil {
@@ -226,32 +252,6 @@ func (h *TemplateHandler) GetTemplatesByUserHandler(w http.ResponseWriter, r *ht
 	}
 
 	logger.Log.Infof("User %s fetched %d templates for user %s", claims.UserID, len(templates), requestedUserID)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(templates)
-}
-
-func (h *TemplateHandler) AdminGetAllTemplatesHandler(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetUserFromContext(r.Context())
-	if claims == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		logger.Log.Warn("Unauthorized attempt to access all templates")
-		return
-	}
-
-	if claims.Role != "admin" {
-		http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
-		logger.Log.Warnf("User %s attempted to access admin-only endpoint", claims.UserID)
-		return
-	}
-
-	templates, err := h.TemplateService.GetAllTemplates(r.Context())
-	if err != nil {
-		http.Error(w, "Failed to fetch templates", http.StatusInternalServerError)
-		logger.Log.Errorf("Admin failed to fetch all templates: %v", err)
-		return
-	}
-
-	logger.Log.Infof("Admin %s fetched %d templates", claims.UserID, len(templates))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(templates)
 }

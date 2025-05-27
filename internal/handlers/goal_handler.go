@@ -116,12 +116,12 @@ func (h *GoalHandler) GetGoalHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//  Ensure the logged-in user is the owner of the goal
-	if goal.UserID.Hex() != claims.UserID {
+	if goal.UserID.Hex() != claims.UserID && !isCollaborator(goal.Collaborators, claims.UserID) {
 		logrus.WithFields(logrus.Fields{
 			"userID": claims.UserID,
 			"goalID": goalID,
-		}).Warn("Forbidden: User tried to access someone else's goal")
-		http.Error(w, "Forbidden: You can only view your own goals", http.StatusForbidden)
+		}).Warn("Forbidden: User tried to access goal without permission")
+		http.Error(w, "Forbidden: You can only view your own or shared goals", http.StatusForbidden)
 		return
 	}
 
@@ -169,12 +169,12 @@ func (h *GoalHandler) UpdateGoalHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Ensure the logged-in user is the owner of the goal
-	if existingGoal.UserID.Hex() != claims.UserID {
+	if existingGoal.UserID.Hex() != claims.UserID && !isCollaborator(existingGoal.Collaborators, claims.UserID) {
 		logrus.WithFields(logrus.Fields{
 			"userID": claims.UserID,
 			"goalID": goalID,
-		}).Warn("Forbidden: Update attempt on someone else's goal")
-		http.Error(w, "Forbidden: You can only update your own goals", http.StatusForbidden)
+		}).Warn("Forbidden: Update attempt by non-owner and non-collaborator")
+		http.Error(w, "Forbidden: Only owner or collaborators can update the goal", http.StatusForbidden)
 		return
 	}
 
@@ -269,9 +269,9 @@ func (h *GoalHandler) UpdateGoalProgressHandler(w http.ResponseWriter, r *http.R
 	}
 
 	// Ensure the logged-in user owns the goal
-	if goal.UserID.Hex() != claims.UserID {
-		log.Warn("Forbidden: User tried to update someone else's goal")
-		http.Error(w, "Forbidden: You can only update your own goals", http.StatusForbidden)
+	if goal.UserID.Hex() != claims.UserID && !isCollaborator(goal.Collaborators, claims.UserID) {
+		log.Warn("Forbidden: User is not the owner or a collaborator")
+		http.Error(w, "Forbidden: Only owner or collaborators can update progress", http.StatusForbidden)
 		return
 	}
 
@@ -525,4 +525,17 @@ func (h *GoalHandler) InviteCollaboratorHandler(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Collaborator successfully invited",
 	})
+}
+
+func isCollaborator(collaborators []primitive.ObjectID, userID string) bool {
+	id, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return false
+	}
+	for _, c := range collaborators {
+		if c == id {
+			return true
+		}
+	}
+	return false
 }

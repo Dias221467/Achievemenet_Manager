@@ -44,10 +44,6 @@ func (s *TemplateService) GetTemplateByID(ctx context.Context, id string) (*mode
 	return s.repo.GetTemplateByID(ctx, objID)
 }
 
-func (s *TemplateService) GetTemplatesByUser(ctx context.Context, userID primitive.ObjectID) ([]models.GoalTemplate, error) {
-	return s.repo.GetTemplatesByUser(ctx, userID)
-}
-
 func (s *TemplateService) CopyTemplateToGoal(ctx context.Context, templateID string, userID primitive.ObjectID) (*models.Goal, error) {
 	objID, err := primitive.ObjectIDFromHex(templateID)
 	if err != nil {
@@ -76,6 +72,10 @@ func (s *TemplateService) CopyTemplateToGoal(ctx context.Context, templateID str
 	}
 
 	return s.goalRepo.CreateGoal(ctx, goal)
+}
+
+func (s *TemplateService) GetTemplatesByUser(ctx context.Context, userID primitive.ObjectID) ([]models.GoalTemplate, error) {
+	return s.repo.GetTemplatesByUser(ctx, userID)
 }
 
 func (s *TemplateService) GetPublicTemplates(ctx context.Context) ([]models.GoalTemplate, error) {
