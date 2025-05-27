@@ -77,6 +77,7 @@ func main() {
 	protectedTemplateRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	protectedTemplateRoutes.HandleFunc("", templateHandler.CreateTemplateHandler).Methods("POST")
 	protectedTemplateRoutes.HandleFunc("", templateHandler.GetTemplatesHandler).Methods("GET")
+	protectedTemplateRoutes.HandleFunc("/{id}", templateHandler.GetTemplateByIDHandler).Methods("GET")
 	protectedTemplateRoutes.HandleFunc("/{id}/copy", templateHandler.CopyTemplateHandler).Methods("POST")
 	protectedTemplateRoutes.HandleFunc("/public", templateHandler.GetPublicTemplatesHandler).Methods("GET")
 	protectedTemplateRoutes.HandleFunc("/user/{id}", templateHandler.GetTemplatesByUserHandler).Methods("GET")
