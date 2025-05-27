@@ -34,18 +34,22 @@ func main() {
 	goalRepo := repository.NewGoalRepository(db)
 	friendRepo := repository.NewFriendRepository(db)
 	templateRepo := repository.NewTemplateRepository(db)
+	chatRepo := repository.NewChatRepository(db) 
 
 	// --- Services ---
 	userService := services.NewUserService(userRepo)
 	goalService := services.NewGoalService(goalRepo, userRepo)
 	friendService := services.NewFriendService(friendRepo, userRepo)
 	templateService := services.NewTemplateService(templateRepo, goalRepo)
+	chatService := services.NewChatService(chatRepo)
 
 	// --- Handlers ---
 	userHandler := handlers.NewUserHandler(userService, cfg)
 	goalHandler := handlers.NewGoalHandler(goalService)
 	friendHandler := handlers.NewFriendHandler(friendService)
 	templateHandler := handlers.NewTemplateHandler(templateService, goalService)
+	chatWSHandler := handlers.NewChatHandler(chatService, cfg.JWTSecret)
+
 
 	// Initialize Gorilla Mux router
 	router := mux.NewRouter()
@@ -65,12 +69,19 @@ func main() {
 	// Register User routes
 	router.HandleFunc("/users/register", userHandler.RegisterUserHandler).Methods("POST")
 	router.HandleFunc("/users/login", userHandler.LoginUserHandler).Methods("POST")
-
+  
 	// Protected user routes (only authenticated users can access)
 	protectedUserRoutes := router.PathPrefix("/users").Subrouter()
 	protectedUserRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	// ====================================================== By Alibek ===========================================================
+	protectedUserRoutes.HandleFunc("/search", userHandler.SearchUsersHandler).Methods("GET")
+	protectedUserRoutes.HandleFunc("/me", userHandler.GetMeHandler).Methods("GET")
+	//=============================================================================================================================
 	protectedUserRoutes.HandleFunc("/{id}", userHandler.GetUserHandler).Methods("GET")
 	protectedUserRoutes.HandleFunc("/{id}", userHandler.UpdateUserHandler).Methods("PUT")
+
+
+
 
 	// Template-related routes
 	protectedTemplateRoutes := router.PathPrefix("/templates").Subrouter()
@@ -84,11 +95,23 @@ func main() {
 	// Friend routes
 	protectedFriendRoutes := router.PathPrefix("/friends").Subrouter()
 	protectedFriendRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
-
 	protectedFriendRoutes.HandleFunc("/{id}/request", friendHandler.SendFriendRequestHandler).Methods("POST")
 	protectedFriendRoutes.HandleFunc("/requests", friendHandler.GetPendingRequestsHandler).Methods("GET")
 	protectedFriendRoutes.HandleFunc("/requests/{id}/respond", friendHandler.RespondToFriendRequestHandler).Methods("POST")
 	protectedFriendRoutes.HandleFunc("", friendHandler.GetFriendsHandler).Methods("GET")
+	protectedFriendRoutes.HandleFunc("/{id}", friendHandler.RemoveFriendHandler).Methods("DELETE")
+
+
+	
+	router.HandleFunc("/ws/chat", chatWSHandler.ChatWebSocketHandler)
+
+	// REST для истории сообщений (тут можно с AuthMiddleware)
+	protectedChatRoutes := router.PathPrefix("/chat").Subrouter()
+	protectedChatRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	protectedChatRoutes.HandleFunc("/{friendId}", chatWSHandler.GetChatHistory).Methods("GET")
+	router.HandleFunc("/api/upload", chatWSHandler.UploadFileHandler).Methods("POST")
+	router.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
+
 
 	// Admin routes
 	adminRoutes := router.PathPrefix("/admin").Subrouter()
@@ -102,14 +125,15 @@ func main() {
 	router.Use(middleware.LoggingMiddleware)
 
 	// Start the HTTP server
-	port := cfg.Port
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"}, // adjust to frontend origin
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
-		AllowCredentials: true,
-	})
-
+  port := cfg.Port
+  c := cors.New(cors.Options{
+    AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173"},  // Your frontend origin
+    AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+    AllowedHeaders:   []string{"Authorization", "Content-Type", "Accept", "X-Requested-With"},
+    ExposedHeaders:   []string{"Content-Length"},
+    AllowCredentials: true,
+    MaxAge:           86400, // 24 hours for preflight cache
+  })
 	handler := c.Handler(router)
 
 	fmt.Printf("Server running on port %s\n", port)

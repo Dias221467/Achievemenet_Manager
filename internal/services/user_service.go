@@ -155,3 +155,11 @@ func (s *UserService) DeleteUser(ctx context.Context, id string) error {
 func (s *UserService) GetAllUsers(ctx context.Context) ([]*models.User, error) {
 	return s.repo.GetAllUsers(ctx)
 }
+
+//=================================== by Alibek ========================================//
+
+func (s *UserService) SearchUsers(ctx context.Context, query string) ([]*models.User, error) {
+    return s.repo.SearchUsers(ctx, query)
+}
+
+
