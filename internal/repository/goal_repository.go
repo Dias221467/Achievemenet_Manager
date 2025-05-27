@@ -122,8 +122,12 @@ func (r *GoalRepository) GetAllGoals(ctx context.Context, limit int64) ([]models
 func (r *GoalRepository) GetGoals(ctx context.Context, userID primitive.ObjectID, category string) ([]models.Goal, error) {
 	var goals []models.Goal
 
-	// Build the filter for MongoDB query
-	filter := bson.M{"user_id": userID}
+	filter := bson.M{
+		"$or": []bson.M{
+			{"user_id": userID},
+			{"collaborators": userID},
+		},
+	}
 	if category != "" {
 		filter["category"] = category
 	}
@@ -147,7 +151,7 @@ func (r *GoalRepository) GetGoals(ctx context.Context, userID primitive.ObjectID
 	logger.Log.WithFields(map[string]interface{}{
 		"user_id": userID.Hex(),
 		"count":   len(goals),
-	}).Info("Filtered goals fetched successfully")
+	}).Info("Filtered goals (owned and collaborated) fetched successfully")
 
 	return goals, nil
 }

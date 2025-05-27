@@ -151,3 +151,80 @@ func (r *UserRepository) GetFriendIDs(ctx context.Context, userID primitive.Obje
 	}
 	return user.Friends, nil
 }
+
+//============================================================By Alibek ==============================================//
+// SearchUsers возвращает пользователей по части username или email
+func (r *UserRepository) SearchUsers(ctx context.Context, query string) ([]*models.User, error) {
+    filter := bson.M{}
+    if query != "" {
+        filter = bson.M{
+            "$or": []bson.M{
+                {"username": bson.M{"$regex": query, "$options": "i"}},
+                {"email": bson.M{"$regex": query, "$options": "i"}},
+            },
+        }
+    }
+    cursor, err := r.collection.Find(ctx, filter)
+    if err != nil {
+        return nil, fmt.Errorf("failed to search users: %v", err)
+    }
+    defer cursor.Close(ctx)
+
+    var users []*models.User
+    for cursor.Next(ctx) {
+        var user models.User
+        if err := cursor.Decode(&user); err != nil {
+            return nil, fmt.Errorf("failed to decode user: %v", err)
+        }
+        user.HashedPassword = "" // не отдавай пароль!
+        users = append(users, &user)
+    }
+    return users, nil
+}
+
+
+
+// GetUsersByIDs fetches user details for a list of ObjectIDs.(Mainly for Friends)
+func (r *UserRepository) GetUsersByIDs(ctx context.Context, ids []primitive.ObjectID) ([]models.User, error) {
+	filter := bson.M{"_id": bson.M{"$in": ids}}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch users by IDs: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	var users []models.User
+	for cursor.Next(ctx) {
+		var user models.User
+		if err := cursor.Decode(&user); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
+// RemoveFriend removes each user from the other's friend list.
+func (r *UserRepository) RemoveFriend(ctx context.Context, userID1, userID2 primitive.ObjectID) error {
+	// Pull userID2 from userID1's friends
+	_, err := r.collection.UpdateOne(ctx,
+		bson.M{"_id": userID1},
+		bson.M{"$pull": bson.M{"friends": userID2}},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to remove friend from user %s: %v", userID1.Hex(), err)
+	}
+
+	// Pull userID1 from userID2's friends
+	_, err = r.collection.UpdateOne(ctx,
+		bson.M{"_id": userID2},
+		bson.M{"$pull": bson.M{"friends": userID1}},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to remove friend from user %s: %v", userID2.Hex(), err)
+	}
+
+	return nil
+}

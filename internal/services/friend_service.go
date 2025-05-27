@@ -79,7 +79,33 @@ func (s *FriendService) RespondToRequest(ctx context.Context, requestID primitiv
 	return nil
 }
 
-// GetFriends returns a list of user IDs who are friends with the given user.
-func (s *FriendService) GetFriends(ctx context.Context, userID primitive.ObjectID) ([]primitive.ObjectID, error) {
-	return s.userRepo.GetFriendIDs(ctx, userID)
+func (s *FriendService) GetFriends(ctx context.Context, userID primitive.ObjectID) ([]models.PublicUser, error) {
+	friendIDs, err := s.userRepo.GetFriendIDs(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get friend IDs: %v", err)
+	}
+
+	if len(friendIDs) == 0 {
+		return []models.PublicUser{}, nil
+	}
+
+	users, err := s.userRepo.GetUsersByIDs(ctx, friendIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users: %v", err)
+	}
+
+	publicFriends := make([]models.PublicUser, 0, len(users))
+	for _, user := range users {
+		publicFriends = append(publicFriends, models.PublicUser{
+			ID:       user.ID,
+			Username: user.Username,
+			Email:    user.Email,
+		})
+	}
+
+	return publicFriends, nil
+}
+
+func (s *FriendService) RemoveFriend(ctx context.Context, userID, friendID primitive.ObjectID) error {
+	return s.userRepo.RemoveFriend(ctx, userID, friendID)
 }

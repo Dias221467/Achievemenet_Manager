@@ -204,3 +204,37 @@ func (h *UserHandler) AdminGetAllUsersHandler(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
 }
+
+
+// ========================================================= By Alibek ==================================================================//
+func (h *UserHandler) GetMeHandler(w http.ResponseWriter, r *http.Request) {
+    claims := middleware.GetUserFromContext(r.Context())
+    if claims == nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    user, err := h.Service.GetUser(r.Context(), claims.UserID)
+    if err != nil {
+        http.Error(w, "User not found", http.StatusNotFound)
+        return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(user)
+}
+
+func (h *UserHandler) SearchUsersHandler(w http.ResponseWriter, r *http.Request) {
+    claims := middleware.GetUserFromContext(r.Context())
+    if claims == nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    query := r.URL.Query().Get("query")
+    users, err := h.Service.SearchUsers(r.Context(), query)
+    if err != nil {
+        http.Error(w, "Failed to search users", http.StatusInternalServerError)
+        return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(users)
+}
+
