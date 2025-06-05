@@ -50,6 +50,86 @@ func (h *UserHandler) RegisterUserHandler(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(createdUser)
 }
 
+func (h *UserHandler) VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
+	// Get token from query params
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Missing verification token", http.StatusBadRequest)
+		return
+	}
+
+	// Call service layer to handle verification
+	err := h.Service.VerifyEmail(r.Context(), token)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Email verified successfully!"))
+}
+
+// RequestPasswordResetHandler handles sending a password reset email.
+func (h *UserHandler) RequestPasswordResetHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	err := h.Service.RequestPasswordReset(r.Context(), req.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Password reset link has been sent."))
+}
+
+// ResetPasswordHandler handles the actual password reset using token.
+func (h *UserHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	log.Info("ResetPasswordHandler called")
+
+	// Extract token from the query parameter
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Missing reset token", http.StatusBadRequest)
+		return
+	}
+
+	// Parse JSON body to get new password
+	var req struct {
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.WithError(err).Warn("Invalid reset password request payload")
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	if req.NewPassword == "" {
+		http.Error(w, "New password is required", http.StatusBadRequest)
+		return
+	}
+
+	// Call service to reset password
+	err := h.Service.ResetPassword(r.Context(), token, req.NewPassword)
+	if err != nil {
+		log.WithError(err).Error("Failed to reset password")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Info("Password reset successful")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Password has been reset successfully"))
+}
+
 // LoginUserHandler handles user login.
 func (h *UserHandler) LoginUserHandler(w http.ResponseWriter, r *http.Request) {
 	// Define a simple struct to receive login credentials.
@@ -154,8 +234,8 @@ func (h *UserHandler) UpdateUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Decode request body
-	var updatedUser models.User
+	// Decode request body as a partial update (map)
+	var updatedUser map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&updatedUser); err != nil {
 		log.WithError(err).Warn("Failed to decode update request")
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
@@ -163,8 +243,14 @@ func (h *UserHandler) UpdateUserHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	defer r.Body.Close()
 
+	// Strip disallowed fields
+	protected := []string{"email", "hashed_password", "role", "is_verified", "verify_token", "_id", "created_at"}
+	for _, field := range protected {
+		delete(updatedUser, field)
+	}
+
 	// Update user in DB
-	updatedUserData, err := h.Service.UpdateUser(r.Context(), requestedUserID, &updatedUser)
+	updatedUserData, err := h.Service.UpdateUser(r.Context(), requestedUserID, updatedUser)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"userID": requestedUserID,
