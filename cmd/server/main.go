@@ -65,12 +65,17 @@ func main() {
 	// Register User routes
 	router.HandleFunc("/users/register", userHandler.RegisterUserHandler).Methods("POST")
 	router.HandleFunc("/users/login", userHandler.LoginUserHandler).Methods("POST")
+	router.HandleFunc("/users/verify", userHandler.VerifyEmailHandler).Methods("GET")
+
+	// Password reset routes
+	router.HandleFunc("/users/request-password-reset", userHandler.RequestPasswordResetHandler).Methods("POST")
+	router.HandleFunc("/users/reset-password", userHandler.ResetPasswordHandler).Methods("POST")
 
 	// Protected user routes (only authenticated users can access)
 	protectedUserRoutes := router.PathPrefix("/users").Subrouter()
 	protectedUserRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	protectedUserRoutes.HandleFunc("/{id}", userHandler.GetUserHandler).Methods("GET")
-	protectedUserRoutes.HandleFunc("/{id}", userHandler.UpdateUserHandler).Methods("PUT")
+	protectedUserRoutes.HandleFunc("/{id}", userHandler.UpdateUserHandler).Methods("PATCH")
 
 	// Template-related routes
 	protectedTemplateRoutes := router.PathPrefix("/templates").Subrouter()

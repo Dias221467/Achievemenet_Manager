@@ -48,6 +48,25 @@ func (r *UserRepository) CreateUser(ctx context.Context, user *models.User) (*mo
 	return user, nil
 }
 
+// GetUserByVerificationToken fetches a user by their verification token.
+func (r *UserRepository) GetUserByVerificationToken(ctx context.Context, token string) (*models.User, error) {
+	var user models.User
+	err := r.collection.FindOne(ctx, bson.M{"verify_token": token}).Decode(&user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find user by verification token: %v", err)
+	}
+	return &user, nil
+}
+
+func (r *UserRepository) GetUserByResetToken(ctx context.Context, token string) (*models.User, error) {
+	var user models.User
+	err := r.collection.FindOne(ctx, bson.M{"reset_token": token}).Decode(&user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find user by reset token: %v", err)
+	}
+	return &user, nil
+}
+
 // GetUserByEmail retrieves a user by email.
 func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
@@ -81,19 +100,27 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id primitive.ObjectID)
 }
 
 // UpdateUser updates an existing user's details.
-func (r *UserRepository) UpdateUser(ctx context.Context, id primitive.ObjectID, user *models.User) (*models.User, error) {
-	user.UpdatedAt = time.Now()
-	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": user})
+func (r *UserRepository) UpdateUser(ctx context.Context, id primitive.ObjectID, updatedUser map[string]interface{}) (*models.User, error) {
+	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": updatedUser})
 	if err != nil {
 		logrus.WithFields(logrus.Fields{
 			"userID": id.Hex(),
 			"error":  err,
-		}).Error("Failed to update user")
+		}).Error("Failed to update user in repository")
 		return nil, fmt.Errorf("failed to update user: %v", err)
 	}
 
 	logrus.WithField("userID", id.Hex()).Info("User updated successfully")
-	return user, nil
+
+	// Return the updated user object
+	var user models.User
+	if err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&user); err != nil {
+		logrus.WithField("userID", id.Hex()).Error("Failed to fetch updated user")
+		return nil, fmt.Errorf("failed to fetch updated user: %v", err)
+	}
+	user.UpdatedAt = time.Now()
+
+	return &user, nil
 }
 
 // DeleteUser deletes a user from the database.

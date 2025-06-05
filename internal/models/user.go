@@ -14,6 +14,10 @@ type User struct {
 	Email          string               `bson:"email"`
 	HashedPassword string               `json:"hashed_password"`
 	Role           string               `bson:"role" json:"role"`
+	IsVerified     bool                 `bson:"is_verified" json:"is_verified"`
+	VerifyToken    string               `bson:"verify_token,omitempty" json:"-"`
+	ResetToken     string               `bson:"reset_token,omitempty" json:"-"`
+	ResetTokenExp  time.Time            `bson:"reset_token_exp,omitempty" json:"-"`
 	CreatedAt      time.Time            `bson:"created_at"`
 	UpdatedAt      time.Time            `bson:"updated_at"`
 }
