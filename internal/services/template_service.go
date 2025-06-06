@@ -55,20 +55,31 @@ func (s *TemplateService) CopyTemplateToGoal(ctx context.Context, templateID str
 		return nil, fmt.Errorf("template not found: %v", err)
 	}
 
+	var steps []models.Step
+	for _, tmplStep := range template.Steps {
+		var substeps []models.Substep
+		for _, tmplSub := range tmplStep.Substeps {
+			substeps = append(substeps, models.Substep{
+				Title: tmplSub.Title,
+				Done:  false,
+			})
+		}
+		steps = append(steps, models.Step{
+			Name:      tmplStep.Name,
+			Substeps:  substeps,
+			Completed: false,
+		})
+	}
+
 	goal := &models.Goal{
 		Name:        template.Title,
 		Description: template.Description,
-		Steps:       template.Steps,
+		Steps:       steps, // Previously converted from []string
 		Category:    template.Category,
 		UserID:      userID,
-		Progress:    map[string]bool{},
 		Status:      "in_progress",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
-	}
-
-	for _, step := range goal.Steps {
-		goal.Progress[step] = false
 	}
 
 	return s.goalRepo.CreateGoal(ctx, goal)
