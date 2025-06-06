@@ -54,6 +54,7 @@ func (h *GoalHandler) CreateGoalHandler(w http.ResponseWriter, r *http.Request) 
 	goal.UserID = userID
 	goal.CreatedAt = time.Now()
 	goal.UpdatedAt = time.Now()
+	goal.Status = "in_progress"
 
 	//  Validate & Parse Due Date (Optional)
 	if !goal.DueDate.IsZero() && goal.DueDate.Before(time.Now()) {
@@ -71,10 +72,16 @@ func (h *GoalHandler) CreateGoalHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// Initialize progress field
-	goal.Progress = make(map[string]bool)
-	for _, step := range goal.Steps {
-		goal.Progress[step] = false
+	// Auto-calculate completion state of each step
+	for i := range goal.Steps {
+		allDone := true
+		for _, sub := range goal.Steps[i].Substeps {
+			if !sub.Done {
+				allDone = false
+				break
+			}
+		}
+		goal.Steps[i].Completed = allDone
 	}
 
 	// Save to DB
@@ -193,9 +200,6 @@ func (h *GoalHandler) UpdateGoalHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Sync Progress Field (Only Keep Steps That Exist in Updated Goal)
-	newProgress := make(map[string]bool)
-
 	//  Validate & Set Category (Optional)
 	if updatedGoal.Category != "" {
 		if _, exists := models.AllowedCategories[updatedGoal.Category]; !exists {
@@ -204,30 +208,38 @@ func (h *GoalHandler) UpdateGoalHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// Create a set of valid steps (to remove old progress)
-	validSteps := make(map[string]bool)
-	for _, step := range updatedGoal.Steps {
-		validSteps[step] = true
+	// Auto-complete parent step when all substeps are done
+	for i := range updatedGoal.Steps {
+		step := &updatedGoal.Steps[i]
+		allSubstepsDone := true
+		for _, sub := range step.Substeps {
+			if !sub.Done {
+				allSubstepsDone = false
+				break
+			}
+		}
+		step.Completed = allSubstepsDone
 	}
 
-	// Keep only the progress of valid steps
-	for step, done := range existingGoal.Progress {
-		if validSteps[step] {
-			newProgress[step] = done // Keep existing progress
+	// Auto-update goal status based on steps
+	allStepsDone := true
+	for _, step := range updatedGoal.Steps {
+		if !step.Completed {
+			allStepsDone = false
+			break
 		}
 	}
-
-	// Add new steps with default `false`
-	for _, step := range updatedGoal.Steps {
-		if _, exists := newProgress[step]; !exists {
-			newProgress[step] = false
-		}
+	if allStepsDone {
+		updatedGoal.Status = "completed"
+	} else {
+		updatedGoal.Status = "in_progress"
 	}
 
 	//  Assign updated values
 	updatedGoal.ID = objID
 	updatedGoal.UserID = existingGoal.UserID
-	updatedGoal.Progress = newProgress // Ensure old steps are removed
+	updatedGoal.Collaborators = existingGoal.Collaborators
+	updatedGoal.CreatedAt = existingGoal.CreatedAt
 	updatedGoal.UpdatedAt = time.Now()
 
 	// Save the updated goal
@@ -277,8 +289,9 @@ func (h *GoalHandler) UpdateGoalProgressHandler(w http.ResponseWriter, r *http.R
 
 	// Decode request body
 	var progressUpdate struct {
-		Step string `json:"step"`
-		Done bool   `json:"done"`
+		StepName   string `json:"step"`
+		SubstepIdx int    `json:"substep_index"`
+		Done       bool   `json:"done"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&progressUpdate); err != nil {
 		log.WithError(err).Warn("Invalid request payload")
@@ -287,31 +300,47 @@ func (h *GoalHandler) UpdateGoalProgressHandler(w http.ResponseWriter, r *http.R
 	}
 	defer r.Body.Close()
 
-	// Ensure the step exists in the goal
-	if _, exists := goal.Progress[progressUpdate.Step]; !exists {
-		log.WithField("step", progressUpdate.Step).Warn("Step not found in goal")
-		http.Error(w, "Step not found in goal", http.StatusBadRequest)
-		return
-	}
+	// Find the step by name
+	var stepFound bool
+	for i := range goal.Steps {
+		if goal.Steps[i].Name == progressUpdate.StepName {
+			stepFound = true
+			// Validate substep index
+			if progressUpdate.SubstepIdx < 0 || progressUpdate.SubstepIdx >= len(goal.Steps[i].Substeps) {
+				http.Error(w, "Invalid substep index", http.StatusBadRequest)
+				return
+			}
 
-	// Update step progress
-	goal.Progress[progressUpdate.Step] = progressUpdate.Done
-	log.WithFields(logrus.Fields{
-		"step": progressUpdate.Step,
-		"done": progressUpdate.Done,
-	}).Info("Step progress updated")
+			// Update the substep's done status
+			goal.Steps[i].Substeps[progressUpdate.SubstepIdx].Done = progressUpdate.Done
 
-	// Check if all steps are completed
-	allCompleted := true
-	for _, done := range goal.Progress {
-		if !done {
-			allCompleted = false
+			// Auto-complete the step if all substeps are done
+			allDone := true
+			for _, sub := range goal.Steps[i].Substeps {
+				if !sub.Done {
+					allDone = false
+					break
+				}
+			}
+			goal.Steps[i].Completed = allDone
 			break
 		}
 	}
 
-	// Update goal status
-	if allCompleted {
+	if !stepFound {
+		http.Error(w, "Step not found", http.StatusBadRequest)
+		return
+	}
+
+	// Check if all steps are completed to set goal status
+	allStepsCompleted := true
+	for _, step := range goal.Steps {
+		if !step.Completed {
+			allStepsCompleted = false
+			break
+		}
+	}
+	if allStepsCompleted {
 		goal.Status = "completed"
 	} else {
 		goal.Status = "in_progress"
@@ -425,15 +454,15 @@ func (h *GoalHandler) GetGoalProgressHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Ensure the logged-in user is the owner of the goal
-	if goal.UserID.Hex() != claims.UserID {
-		log.Warn("Forbidden: Attempt to access another user's goal progress")
-		http.Error(w, "Forbidden: You can only view your own goal progress", http.StatusForbidden)
+	if goal.UserID.Hex() != claims.UserID && !isCollaborator(goal.Collaborators, claims.UserID) {
+		log.Warn("Forbidden: Not owner or collaborator")
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	// Return only the progress field
+	// Return steps and substeps as progress data
 	response := map[string]interface{}{
-		"progress": goal.Progress,
+		"steps": goal.Steps,
 	}
 
 	log.Info("Goal progress fetched successfully")
