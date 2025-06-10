@@ -34,18 +34,21 @@ func main() {
 	goalRepo := repository.NewGoalRepository(db)
 	friendRepo := repository.NewFriendRepository(db)
 	templateRepo := repository.NewTemplateRepository(db)
+	wishRepo := repository.NewWishRepository(db)
 
 	// --- Services ---
 	userService := services.NewUserService(userRepo)
 	goalService := services.NewGoalService(goalRepo, userRepo)
 	friendService := services.NewFriendService(friendRepo, userRepo)
 	templateService := services.NewTemplateService(templateRepo, goalRepo)
+	wishService := services.NewWishService(wishRepo, goalRepo)
 
 	// --- Handlers ---
 	userHandler := handlers.NewUserHandler(userService, cfg)
 	goalHandler := handlers.NewGoalHandler(goalService)
 	friendHandler := handlers.NewFriendHandler(friendService)
 	templateHandler := handlers.NewTemplateHandler(templateService, goalService)
+	wishHandler := handlers.NewWishHandler(wishService, goalService)
 
 	// Initialize Gorilla Mux router
 	router := mux.NewRouter()
@@ -96,6 +99,20 @@ func main() {
 	protectedFriendRoutes.HandleFunc("/requests/{id}/respond", friendHandler.RespondToFriendRequestHandler).Methods("POST")
 	protectedFriendRoutes.HandleFunc("", friendHandler.GetFriendsHandler).Methods("GET")
 	protectedFriendRoutes.HandleFunc("/{id}", friendHandler.RemoveFriendHandler).Methods("DELETE")
+
+	// Wish routes
+	protectedWishRoutes := router.PathPrefix("/wishes").Subrouter()
+	protectedWishRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+
+	protectedWishRoutes.HandleFunc("", wishHandler.CreateWishHandler).Methods("POST")
+	protectedWishRoutes.HandleFunc("", wishHandler.GetWishesHandler).Methods("GET")
+	protectedWishRoutes.HandleFunc("/{id}", wishHandler.GetWishByIDHandler).Methods("GET")
+	protectedWishRoutes.HandleFunc("/{id}", wishHandler.UpdateWishHandler).Methods("PUT")
+	protectedWishRoutes.HandleFunc("/{id}", wishHandler.DeleteWishHandler).Methods("DELETE")
+	protectedWishRoutes.HandleFunc("/{id}/promote", wishHandler.PromoteWishHandler).Methods("POST")
+
+	protectedWishRoutes.HandleFunc("/{id}/upload", wishHandler.UploadWishImageHandler).Methods("POST")
+	router.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads/"))))
 
 	// Admin routes
 	adminRoutes := router.PathPrefix("/admin").Subrouter()
