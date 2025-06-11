@@ -79,6 +79,7 @@ func main() {
 	protectedUserRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	protectedUserRoutes.HandleFunc("/{id}", userHandler.GetUserHandler).Methods("GET")
 	protectedUserRoutes.HandleFunc("/{id}", userHandler.UpdateUserHandler).Methods("PATCH")
+	protectedUserRoutes.HandleFunc("", userHandler.GetAllUsersHandler).Methods("GET")
 
 	// Template-related routes
 	protectedTemplateRoutes := router.PathPrefix("/templates").Subrouter()
@@ -120,7 +121,6 @@ func main() {
 	adminRoutes.Use(middleware.RequireRole("admin"))
 	adminRoutes.HandleFunc("/goals", goalHandler.GetAllGoalsHandler).Methods("GET")
 	adminRoutes.HandleFunc("/templates", templateHandler.AdminGetAllTemplatesHandler).Methods("GET")
-	adminRoutes.HandleFunc("/users", userHandler.AdminGetAllUsersHandler).Methods("GET")
 
 	// Apply middleware for logging
 	router.Use(middleware.LoggingMiddleware)

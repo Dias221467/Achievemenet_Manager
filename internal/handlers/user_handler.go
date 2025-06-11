@@ -265,17 +265,12 @@ func (h *UserHandler) UpdateUserHandler(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(updatedUserData)
 }
 
-func (h *UserHandler) AdminGetAllUsersHandler(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) GetAllUsersHandler(w http.ResponseWriter, r *http.Request) {
+	// Auth check
 	claims := middleware.GetUserFromContext(r.Context())
 	if claims == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		logger.Log.Warn("Unauthorized attempt to fetch all users")
-		return
-	}
-
-	if claims.Role != "admin" {
-		http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
-		logger.Log.Warnf("User %s attempted to access admin-only user list", claims.UserID)
 		return
 	}
 
