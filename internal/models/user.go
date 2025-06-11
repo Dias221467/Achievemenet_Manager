@@ -20,6 +20,7 @@ type User struct {
 	ResetTokenExp  time.Time            `bson:"reset_token_exp,omitempty" json:"-"`
 	CreatedAt      time.Time            `bson:"created_at"`
 	UpdatedAt      time.Time            `bson:"updated_at"`
+	LastActiveAt   time.Time            `bson:"last_active_at,omitempty" json:"last_active_at,omitempty"`
 }
 
 type PublicUser struct {

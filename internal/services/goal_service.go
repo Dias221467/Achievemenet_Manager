@@ -7,20 +7,23 @@ import (
 	"github.com/Dias221467/Achievemenet_Manager/internal/models"
 	"github.com/Dias221467/Achievemenet_Manager/internal/repository"
 	"github.com/Dias221467/Achievemenet_Manager/pkg/logger"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // GoalService encapsulates the business logic for goals.
 type GoalService struct {
-	repo     *repository.GoalRepository
-	userRepo *repository.UserRepository
+	repo                *repository.GoalRepository
+	userRepo            *repository.UserRepository
+	NotificationService *NotificationService
 }
 
 // NewGoalService creates a new instance of GoalService.
-func NewGoalService(repo *repository.GoalRepository, userRepo *repository.UserRepository) *GoalService {
+func NewGoalService(repo *repository.GoalRepository, userRepo *repository.UserRepository, notificationService *NotificationService) *GoalService {
 	return &GoalService{
-		repo:     repo,
-		userRepo: userRepo,
+		repo:                repo,
+		userRepo:            userRepo,
+		NotificationService: notificationService,
 	}
 }
 
@@ -71,6 +74,22 @@ func (s *GoalService) UpdateGoal(ctx context.Context, id string, updatedGoal *mo
 	if err != nil {
 		logger.Log.WithField("goal_id", id).WithError(err).Error("Failed to update goal")
 		return nil, fmt.Errorf("failed to update goal: %v", err)
+	}
+
+	if goal.Status == "completed" {
+		go func() {
+			err := s.NotificationService.CreateNotification(
+				ctx,
+				goal.UserID,
+				"goal_completed",
+				"🎉 Goal Completed",
+				fmt.Sprintf("You’ve successfully completed your goal: \"%s\"!", goal.Name),
+				&goal.ID,
+			)
+			if err != nil {
+				logrus.WithError(err).Warn("Failed to send goal completed notification")
+			}
+		}()
 	}
 
 	logger.Log.WithField("goal_id", id).Info("Goal updated successfully in service layer")

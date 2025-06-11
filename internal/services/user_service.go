@@ -270,3 +270,14 @@ func (s *UserService) DeleteUser(ctx context.Context, id string) error {
 func (s *UserService) GetAllUsers(ctx context.Context) ([]*models.User, error) {
 	return s.repo.GetAllUsers(ctx)
 }
+
+func (s *UserService) UpdateLastActive(ctx context.Context, id primitive.ObjectID) error {
+	update := map[string]interface{}{
+		"last_active_at": time.Now(),
+	}
+	_, err := s.repo.UpdateUser(ctx, id, update)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to update last active time")
+	}
+	return err
+}

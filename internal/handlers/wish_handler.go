@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -18,14 +19,16 @@ import (
 )
 
 type WishHandler struct {
-	Service     *services.WishService
-	GoalService *services.GoalService
+	Service         *services.WishService
+	GoalService     *services.GoalService
+	ActivityService *services.ActivityService
 }
 
-func NewWishHandler(service *services.WishService, goalService *services.GoalService) *WishHandler {
+func NewWishHandler(service *services.WishService, goalService *services.GoalService, activityService *services.ActivityService) *WishHandler {
 	return &WishHandler{
-		Service:     service,
-		GoalService: goalService,
+		Service:         service,
+		GoalService:     goalService,
+		ActivityService: activityService,
 	}
 }
 
@@ -59,6 +62,8 @@ func (h *WishHandler) CreateWishHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	_ = h.ActivityService.LogActivity(r.Context(), userID, "wish_created", createdWish.ID, fmt.Sprintf("Created wish: %s", createdWish.Title))
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(createdWish)
 }
@@ -80,7 +85,7 @@ func (h *WishHandler) GetWishByIDHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	if wish.UserID.Hex() != claims.UserID {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		http.Error(w, "Forbidden, not owner of Wish", http.StatusForbidden)
 		return
 	}
 
@@ -99,6 +104,14 @@ func (h *WishHandler) GetWishesHandler(w http.ResponseWriter, r *http.Request) {
 	userID, err := primitive.ObjectIDFromHex(claims.UserID)
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		return
+	}
+
+	wishID := mux.Vars(r)["id"]
+
+	wish, err := h.Service.GetWishByID(r.Context(), wishID)
+	if err != nil || wish.UserID.Hex() != claims.UserID {
+		http.Error(w, "Forbidden or not found", http.StatusForbidden)
 		return
 	}
 
@@ -140,6 +153,8 @@ func (h *WishHandler) UpdateWishHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	_ = h.ActivityService.LogActivity(r.Context(), wish.UserID, "wish_updated", wish.ID, fmt.Sprintf("Updated wish: %s", wish.Title))
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Wish updated successfully"))
 }
@@ -163,6 +178,8 @@ func (h *WishHandler) DeleteWishHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Failed to delete wish", http.StatusInternalServerError)
 		return
 	}
+
+	_ = h.ActivityService.LogActivity(r.Context(), wish.UserID, "wish_deleted", wish.ID, fmt.Sprintf("Deleted wish: %s", wish.Title))
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Wish deleted successfully"))
@@ -214,6 +231,8 @@ func (h *WishHandler) PromoteWishHandler(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Failed to promote wish to goal", http.StatusInternalServerError)
 		return
 	}
+
+	_ = h.ActivityService.LogActivity(r.Context(), userID, "wish_promoted", wish.ID, fmt.Sprintf("Promoted wish to goal: %s", wish.Title))
 
 	// Respond with the created goal
 	w.Header().Set("Content-Type", "application/json")
