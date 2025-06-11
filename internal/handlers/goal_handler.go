@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -17,12 +18,18 @@ import (
 
 // GoalHandler handles HTTP requests related to goals.
 type GoalHandler struct {
-	Service *services.GoalService
+	Service             *services.GoalService
+	ActivityService     *services.ActivityService
+	NotificationService *services.NotificationService
 }
 
 // NewGoalHandler creates a new instance of GoalHandler.
-func NewGoalHandler(service *services.GoalService) *GoalHandler {
-	return &GoalHandler{Service: service}
+func NewGoalHandler(goalService *services.GoalService, activityService *services.ActivityService, notificationService *services.NotificationService) *GoalHandler {
+	return &GoalHandler{
+		Service:             goalService,
+		ActivityService:     activityService,
+		NotificationService: notificationService,
+	}
 }
 
 // CreateGoalHandler handles the creation of a new goal.
@@ -91,6 +98,9 @@ func (h *GoalHandler) CreateGoalHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Failed to create goal", http.StatusInternalServerError)
 		return
 	}
+
+	// Log activity
+	_ = h.ActivityService.LogActivity(r.Context(), userID, "goal_created", createdGoal.ID, fmt.Sprintf("Created goal: %s", createdGoal.Name))
 
 	logrus.WithFields(logrus.Fields{
 		"userID": claims.UserID,
@@ -250,6 +260,8 @@ func (h *GoalHandler) UpdateGoalHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	_ = h.ActivityService.LogActivity(r.Context(), existingGoal.UserID, "goal_updated", updatedGoal.ID, fmt.Sprintf("Updated goal: %s", updatedGoal.Name))
+
 	logrus.WithFields(logrus.Fields{
 		"userID": claims.UserID,
 		"goalID": goalID,
@@ -356,6 +368,8 @@ func (h *GoalHandler) UpdateGoalProgressHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	_ = h.ActivityService.LogActivity(r.Context(), goal.UserID, "goal_progress_updated", goal.ID, fmt.Sprintf("Updated progress for goal: %s", goal.Name))
+
 	log.Info("Goal progress successfully updated")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(updatedGoal)
@@ -397,6 +411,8 @@ func (h *GoalHandler) DeleteGoalHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Failed to delete goal", http.StatusInternalServerError)
 		return
 	}
+
+	_ = h.ActivityService.LogActivity(r.Context(), goal.UserID, "goal_deleted", goal.ID, fmt.Sprintf("Deleted goal: %s", goal.Name))
 
 	log.Info("Goal deleted successfully")
 	w.WriteHeader(http.StatusNoContent)
@@ -548,6 +564,20 @@ func (h *GoalHandler) InviteCollaboratorHandler(w http.ResponseWriter, r *http.R
 		logger.Log.Warnf("Failed to invite collaborator: %v", err)
 		return
 	}
+
+	goal, _ := h.Service.GetGoal(r.Context(), goalID)
+
+	_ = h.ActivityService.LogActivity(r.Context(), requesterID, "collaborator_invited", goal.ID, fmt.Sprintf("Invited user %s to collaborate", collaboratorID))
+
+	// Send notification to invited user
+	_ = h.NotificationService.CreateNotification(
+		r.Context(),
+		collaboratorID,
+		"collaborator_added",
+		"You’ve been added to a goal",
+		fmt.Sprintf("You’ve been invited to collaborate on: %s", goal.Name),
+		&goal.ID,
+	)
 
 	logger.Log.Infof("User %s invited %s to collaborate on goal %s", claims.UserID, req.CollaboratorID, goalID)
 	w.Header().Set("Content-Type", "application/json")

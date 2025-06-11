@@ -1,6 +1,3 @@
 # Environment variables
 config/.env
 /uploads
-internal/services/activity_service.go
-internal/repository/activity_repository.go
-internal/models/activity.go

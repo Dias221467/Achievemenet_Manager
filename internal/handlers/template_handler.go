@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -17,13 +18,15 @@ import (
 type TemplateHandler struct {
 	TemplateService *services.TemplateService
 	GoalService     *services.GoalService
+	ActivityService *services.ActivityService
 }
 
 // NewTemplateHandler creates a new instance of TemplateHandler.
-func NewTemplateHandler(templateService *services.TemplateService, goalService *services.GoalService) *TemplateHandler {
+func NewTemplateHandler(templateService *services.TemplateService, goalService *services.GoalService, activityService *services.ActivityService) *TemplateHandler {
 	return &TemplateHandler{
 		TemplateService: templateService,
 		GoalService:     goalService,
+		ActivityService: activityService,
 	}
 }
 
@@ -66,6 +69,8 @@ func (h *TemplateHandler) CreateTemplateHandler(w http.ResponseWriter, r *http.R
 		logger.Log.Errorf("Error creating template: %v", err)
 		return
 	}
+
+	_ = h.ActivityService.LogActivity(r.Context(), userID, "template_created", createdTemplate.ID, fmt.Sprintf("Created template: %s", createdTemplate.Title))
 
 	logger.Log.Infof("User %s created template %s", claims.UserID, createdTemplate.ID.Hex())
 	w.Header().Set("Content-Type", "application/json")
@@ -159,6 +164,8 @@ func (h *TemplateHandler) CopyTemplateHandler(w http.ResponseWriter, r *http.Req
 		logger.Log.Errorf("Failed to copy template: %v", err)
 		return
 	}
+
+	_ = h.ActivityService.LogActivity(r.Context(), userID, "template_copied", goal.ID, fmt.Sprintf("Copied template to goal: %s", goal.Name))
 
 	logger.Log.Infof("User %s copied template %s into goal %s", claims.UserID, templateID, goal.ID.Hex())
 	w.Header().Set("Content-Type", "application/json")

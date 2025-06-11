@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/Dias221467/Achievemenet_Manager/internal/services"
@@ -13,12 +14,20 @@ import (
 
 // FriendHandler manages HTTP endpoints related to friend requests.
 type FriendHandler struct {
-	Service *services.FriendService
+	Service             *services.FriendService
+	ActivityService     *services.ActivityService
+	NotificationService *services.NotificationService
+	UserService         *services.UserService
 }
 
 // NewFriendHandler initializes a new FriendHandler.
-func NewFriendHandler(service *services.FriendService) *FriendHandler {
-	return &FriendHandler{Service: service}
+func NewFriendHandler(service *services.FriendService, activityService *services.ActivityService, notificationService *services.NotificationService, userService *services.UserService) *FriendHandler {
+	return &FriendHandler{
+		Service:             service,
+		ActivityService:     activityService,
+		NotificationService: notificationService,
+		UserService:         userService,
+	}
 }
 
 // SendFriendRequestHandler allows a user to send a friend request.
@@ -47,6 +56,8 @@ func (h *FriendHandler) SendFriendRequestHandler(w http.ResponseWriter, r *http.
 		logger.Log.Warnf("Failed to send friend request: %v", err)
 		return
 	}
+
+	_ = h.ActivityService.LogActivity(r.Context(), senderID, "friend_request_sent", receiverID, "Sent a friend request")
 
 	logger.Log.Infof("User %s sent a friend request to %s", claims.UserID, receiverIDHex)
 	w.Header().Set("Content-Type", "application/json")
@@ -87,6 +98,9 @@ func (h *FriendHandler) RespondToFriendRequestHandler(w http.ResponseWriter, r *
 		return
 	}
 
+	receiverID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	senderID, _ := primitive.ObjectIDFromHex(requestIDHex)
+
 	requestID, err := primitive.ObjectIDFromHex(requestIDHex)
 	if err != nil {
 		http.Error(w, "Invalid request ID", http.StatusBadRequest)
@@ -110,6 +124,27 @@ func (h *FriendHandler) RespondToFriendRequestHandler(w http.ResponseWriter, r *
 		http.Error(w, "Failed to respond to request", http.StatusInternalServerError)
 		logger.Log.Errorf("Failed to respond to friend request %s: %v", requestIDHex, err)
 		return
+	}
+
+	_ = h.ActivityService.LogActivity(r.Context(), receiverID, "friend_request_responded", senderID, fmt.Sprintf("Responded to friend request: %v", body.Accept))
+
+	user, err := h.UserService.GetUser(r.Context(), claims.UserID)
+	if err != nil {
+		logger.Log.WithError(err).Warn("Failed to fetch user for notification")
+		// Fallback message without username
+		go func() {
+			err := h.NotificationService.CreateNotification(
+				r.Context(),
+				senderID,
+				"friend_request_responded",
+				"🤝 Friend Request Response",
+				fmt.Sprintf("Your friend request was %s by %s", body.Accept, user.Username),
+				&receiverID, // Optional: reference to the responding user
+			)
+			if err != nil {
+				logger.Log.WithError(err).Warn("Failed to send friend request response notification")
+			}
+		}()
 	}
 
 	logger.Log.Infof("User %s responded to friend request %s (accepted: %v)", claims.UserID, requestIDHex, body.Accept)
@@ -168,6 +203,8 @@ func (h *FriendHandler) RemoveFriendHandler(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	_ = h.ActivityService.LogActivity(r.Context(), userID, "friend_removed", friendObjID, "Removed a friend")
 
 	w.WriteHeader(http.StatusNoContent)
 }
