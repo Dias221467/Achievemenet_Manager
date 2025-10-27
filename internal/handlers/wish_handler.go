@@ -107,14 +107,6 @@ func (h *WishHandler) GetWishesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wishID := mux.Vars(r)["id"]
-
-	wish, err := h.Service.GetWishByID(r.Context(), wishID)
-	if err != nil || wish.UserID.Hex() != claims.UserID {
-		http.Error(w, "Forbidden or not found", http.StatusForbidden)
-		return
-	}
-
 	wishes, err := h.Service.GetWishesByUser(r.Context(), userID)
 	if err != nil {
 		http.Error(w, "Failed to fetch wishes", http.StatusInternalServerError)

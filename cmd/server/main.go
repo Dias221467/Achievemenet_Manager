@@ -154,14 +154,16 @@ func main() {
 	// Apply middleware for logging
 	router.Use(middleware.LoggingMiddleware)
 
-	// Start the HTTP server
-	port := cfg.Port
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"}, // adjust to frontend origin
+		AllowedOrigins:   []string{"http://localhost:8081"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "Accept", "X-Requested-With"},
+		ExposedHeaders:   []string{"Content-Length"},
 		AllowCredentials: true,
+		MaxAge:           86400, // 24 hours for preflight cache
 	})
+
+	port := cfg.Port
 
 	handler := c.Handler(router)
 
